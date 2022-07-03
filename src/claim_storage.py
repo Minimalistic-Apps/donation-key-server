@@ -1,16 +1,14 @@
-from calendar import c
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Optional
-from utils import dict_key_by_value
 
-from lnbits import LnUrl
+from lnbits import LnBitsPaymentLinkId
 from app import DonationTokenClaim
 
 
 class ClaimStorage(metaclass=ABCMeta):
     @abstractmethod
-    def add(self, claim: DonationTokenClaim, id: int, ln_url: LnUrl) -> None:
+    def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -18,7 +16,7 @@ class ClaimStorage(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_claim_by_id(self, id: int) -> Optional[DonationTokenClaim]:
+    def get_claim_by_id(self, id: LnBitsPaymentLinkId) -> Optional[DonationTokenClaim]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -27,20 +25,18 @@ class ClaimStorage(metaclass=ABCMeta):
 
 
 class InMemoryClaimStorage(ClaimStorage):
-    _lnurls: Dict[DonationTokenClaim, LnUrl] = {}
-    _ids: Dict[DonationTokenClaim, int] = {}
+    _ids: Dict[LnBitsPaymentLinkId, DonationTokenClaim] = {}
     _status: Dict[DonationTokenClaim, List[str]] = {}
 
-    def add(self, claim: DonationTokenClaim, id: int, ln_url: LnUrl) -> None:
-        self._lnurls[claim] = ln_url
-        self._ids[claim] = id
+    def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
+        self._ids[id] = claim
         self.change_status(claim, "Claim created, waiting for payment...")
 
     def change_status(self, claim: DonationTokenClaim, status: str) -> None:
         self._status[claim].append(f"[{datetime.now().isoformat()}] {status}")
 
-    def get_claim_by_id(self, id: int) -> Optional[DonationTokenClaim]:
-        return dict_key_by_value(self._ids, id)
+    def get_claim_by_id(self, id: LnBitsPaymentLinkId) -> Optional[DonationTokenClaim]:
+        return self._ids.get(id, None)
 
     def get_claim_status(self, claim: DonationTokenClaim) -> Optional[List[str]]:
         return self._status.get(claim, None)

@@ -53,7 +53,7 @@ async def do_create_pay_link(
     amount: AmountSats,
     claim: DonationTokenClaim,
     callback_url: str,
-) -> Tuple[int, LnUrl]:
+) -> Tuple[LnBitsPaymentLinkId, LnUrl]:
     id = await ln_bits_api.create_pay_link(amount, claim, callback_url)
 
     return id, await ln_bits_api.get_payment_link(id)
@@ -75,7 +75,7 @@ async def donation_key_claim(request: web.Request) -> web.Response:
         domain + URL_PAYMENT_SUCCESS_CALLBACK,
     )
 
-    claim_storage.add(claim, id, lnurl)
+    claim_storage.add(claim, id)
 
     return web.Response(body=json.dumps({"lnurl": lnurl}))
 
