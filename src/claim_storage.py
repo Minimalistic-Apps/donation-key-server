@@ -1,9 +1,9 @@
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Optional
+from claim import DonationTokenClaim
 
 from lnbits import LnBitsPaymentLinkId
-from app import DonationTokenClaim
 
 
 class ClaimStorage(metaclass=ABCMeta):
@@ -30,6 +30,7 @@ class InMemoryClaimStorage(ClaimStorage):
 
     def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
         self._ids[id] = claim
+        self._status[claim] = []
         self.change_status(claim, "Claim created, waiting for payment...")
 
     def change_status(self, claim: DonationTokenClaim, status: str) -> None:

@@ -6,6 +6,7 @@ import json
 from decimal import Decimal
 from typing import NewType, Tuple
 from aiohttp import web
+from claim import DonationTokenClaim
 
 from claim_storage import ClaimStorage, InMemoryClaimStorage
 
@@ -13,15 +14,17 @@ from lnbits import (
     AmountSats,
     LnBitsApi,
     LnBitsApiKey,
+    LnBitsCallbackData,
     LnBitsPaymentLinkId,
     LnUrl,
+    PaymentHash,
 )
+from payment_callback_validation import payment_callback_validation
 from sign import sign
+from validate_payment_by_hash import validate_payment_by_hash
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
-
-DonationTokenClaim = NewType("DonationTokenClaim", str)
 
 
 def get_env(name: str) -> str:
@@ -72,7 +75,8 @@ async def donation_key_claim(request: web.Request) -> web.Response:
     id, lnurl = await do_create_pay_link(
         sats_amount,
         claim,
-        domain + URL_PAYMENT_SUCCESS_CALLBACK,
+        "https://webhook.site/e48b88ce-b07d-43b0-b377-78726d444539"
+        # domain + URL_PAYMENT_SUCCESS_CALLBACK,
     )
 
     claim_storage.add(claim, id)
@@ -82,29 +86,26 @@ async def donation_key_claim(request: web.Request) -> web.Response:
 
 @routes.post(URL_PAYMENT_SUCCESS_CALLBACK)
 async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
-    # {
-    #     "payment_hash": "0886....",
-    #     "payment_request": "lnbc100n1p3.....",
-    #     "amount": 10000,
-    #     "comment": "",
-    #     "lnurlp": 1944  # <-- This is ID of the Pay Link
-    # }
     json_request = await request.json()
     logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
-
-    id = LnBitsPaymentLinkId(int(json_request["lnurlp"]))
-    amount = AmountSats(Decimal(json_request["amount"]))
-
-    claim = claim_storage.get_claim_by_id(id)
+    callback_data = LnBitsCallbackData(**json_request)
+    claim = claim_storage.get_claim_by_id(callback_data.lnurlp)
 
     if claim is None:
         logging.error(f"WebServer: CLAIM NOT FOUND! for body: {json_request}")
         return web.Response(body="", status=200)
 
-    if amount < sats_amount:
-        claim_storage.change_status(
-            claim, f"Amount send ${json_request.amount} is less then ${sats_amount}, please contact suport for refund"
-        )
+    callback_validation = payment_callback_validation(callback_data, sats_amount)
+    if callback_validation is not None:
+        claim_storage.change_status(claim, callback_validation)
+        return web.Response(body="", status=200)
+
+    payment_hash = PaymentHash(json_request["payment_hash"])
+    payment = await ln_bits_api.get_payment(payment_hash)
+
+    payment_validation = validate_payment_by_hash(payment, callback_data.lnurlp)
+    if payment_validation is not None:
+        claim_storage.change_status(claim, payment_validation)
         return web.Response(body="", status=200)
 
     claim_storage.change_status(claim, f"Sucessfully claimed")

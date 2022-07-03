@@ -1,13 +1,53 @@
 from decimal import Decimal
 import logging
-from typing import NewType
+from typing import Dict, NewType
 import aiohttp
+from pydantic import BaseModel
 
 
 LnUrl = NewType("LnUrl", str)
 LnBitsApiKey = NewType("LnBitsApiKey", str)
 LnBitsPaymentLinkId = NewType("LnBitsPaymentLinkId", int)
 AmountSats = NewType("AmountSats", Decimal)
+PaymentHash = NewType("PaymentHash", str)
+
+
+class LnBitsPaymentDetailsExtra(BaseModel):
+    tag: str
+    link: LnBitsPaymentLinkId
+    comment: str
+    extra: str
+    wh_status: int
+
+
+class LnBitsPaymentDetails(BaseModel):
+    checking_id: str
+    pending: bool
+    amount: int
+    fee: int
+    memo: str
+    time: int
+    bolt11: str
+    preimage: str
+    payment_hash: str
+    extra: LnBitsPaymentDetailsExtra
+    wallet_id: str
+    # webhook: any
+    # webhook_status: any
+
+
+class LnBitsPayment(BaseModel):
+    paid: bool
+    preimage: str
+    details: LnBitsPaymentDetails
+
+
+class LnBitsCallbackData(BaseModel):
+    payment_hash: PaymentHash
+    payment_request: str
+    amount: AmountSats
+    comment: str
+    lnurlp: LnBitsPaymentLinkId
 
 
 class LnBitsApi:
@@ -47,3 +87,12 @@ class LnBitsApi:
             logging.info(f"Outgoing >> URL: {url}, Result: {result}")
 
             return LnUrl(result["lnurl"])
+
+    async def get_payment(self, payment_hash: PaymentHash) -> LnBitsPayment:
+        url = f"{self._baseUrl}/api/v1/payments/{payment_hash}"
+
+        async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
+            result = await response.json()
+            logging.info(f"Outgoing >> URL: {url}, Result: {result}")
+
+            return LnBitsPayment(**result)

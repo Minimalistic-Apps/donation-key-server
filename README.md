@@ -3,7 +3,7 @@
 ```
 python3.10 -m venv venv
 source venv/bin/activate
-pip install asyncio aiohttp pycryptodome
+pip install asyncio aiohttp pycryptodome pydantic
 # For development
 pip install black mypy
 ```
