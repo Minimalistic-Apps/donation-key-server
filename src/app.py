@@ -1,19 +1,26 @@
 from cmath import log
 from decimal import Decimal
 import logging
-from typing import Dict, Optional
+from typing import Dict, NewType, Optional, Tuple
 import aiohttp
 from aiohttp import web
 import os
 import json
 
-from lnurl import do_create_pay_link
-from app_types import AmountSats, DonationTokenClaim, LnUrl, LnUrlToken
+from lnbits import (
+    AmountSats,
+    LnBitsApi,
+    LnBitsApiKey,
+    LnBitsPaymentLinkId,
+    LnUrl,
+)
 from utils import dict_key_by_value
 
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
+
+DonationTokenClaim = NewType("DonationTokenClaim", str)
 
 
 def get_env(name: str) -> str:
@@ -25,7 +32,8 @@ def get_env(name: str) -> str:
 
 
 domain = get_env("DOMAIN")
-lnurl_token = LnUrlToken(get_env("LNURL_TOKEN"))
+ln_bits_api_key = LnBitsApiKey(get_env("LN_BITS_API_KEY"))
+ln_bits_url = LnBitsApiKey(get_env("LN_BITS_URL"))
 sats_amount = AmountSats(Decimal(get_env("SATS_AMOUNT")))
 
 
@@ -54,6 +62,18 @@ class ClaimStorage:
 claim_stroage = ClaimStorage()
 routes = web.RouteTableDef()
 
+ln_bits_api = LnBitsApi(aiohttp.ClientSession(), ln_bits_url, ln_bits_api_key)
+
+
+async def do_create_pay_link(
+    amount: AmountSats,
+    claim: DonationTokenClaim,
+    callback_url: str,
+) -> Tuple[int, LnUrl]:
+    id = await ln_bits_api.create_pay_link(amount, claim, callback_url)
+
+    return id, await ln_bits_api.get_payment_link(id)
+
 
 @routes.post(URL_CLAIM)
 async def donation_key_claim(request: web.Request) -> web.Response:
@@ -65,35 +85,31 @@ async def donation_key_claim(request: web.Request) -> web.Response:
         return web.Response(body=json.dumps({"errors": ["'claim' is missing in the body "]}))
 
     claim = DonationTokenClaim(json_request["claim"])
-    async with aiohttp.ClientSession() as lnurl_session:
-        id, lnurl = await do_create_pay_link(
-            lnurl_session,
-            lnurl_token,
-            sats_amount,
-            claim,
-            domain + URL_PAYMENT_SUCCESS_CALLBACK,
-        )
+    id, lnurl = await do_create_pay_link(
+        sats_amount,
+        claim,
+        domain + URL_PAYMENT_SUCCESS_CALLBACK,
+    )
 
-        claim_stroage.add(claim, id, lnurl)
+    claim_stroage.add(claim, id, lnurl)
 
-        return web.Response(body=json.dumps({"lnurl": lnurl}))
+    return web.Response(body=json.dumps({"lnurl": lnurl}))
 
 
 @routes.post(URL_PAYMENT_SUCCESS_CALLBACK)
 async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
     # {
-    #     "payment_hash": "XXXXXXX",
-    #     "payment_request": "lnbc100n1p3p0sdw.....",
+    #     "payment_hash": "0886....",
+    #     "payment_request": "lnbc100n1p3.....",
     #     "amount": 10000,
     #     "comment": "",
-    #     "extra": null,
-    #     "lnurlp": 5
+    #     "lnurlp": 1944  # <-- This is ID of the Pay Link
     # }
-
     json_request = await request.json()
     logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
 
-    id = int(json_request["lnurlp"])
+    id = LnBitsPaymentLinkId(int(json_request["lnurlp"]))
+    amount = AmountSats(Decimal(json_request["amount"]))
 
     claim = claim_stroage.get_claim_by_id(id)
 
@@ -101,7 +117,7 @@ async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
         logging.error(f"WebServer: CLAIM NOT FOUND! for body: {json_request}")
         return web.Response(body="", status=200)
 
-    if json_request.amount < sats_amount:
+    if amount < sats_amount:
         claim_stroage.change_status(
             claim, f"Amount send ${json_request.amount} is less then ${sats_amount}, please contact suport for refund"
         )
