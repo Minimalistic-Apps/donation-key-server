@@ -31,6 +31,7 @@ def get_env(name: str) -> str:
 
     return raw
 
+
 private_key_path = get_env("PRIVATE_KEY")
 domain = get_env("DOMAIN")
 ln_bits_api_key = LnBitsApiKey(get_env("LN_BITS_API_KEY"))
@@ -42,7 +43,7 @@ URL_CLAIM = "/api/donation/key/claim"
 URL_PAYMENT_SUCCESS_CALLBACK = "/api/donation/key/payment-success-callback"
 
 
-claim_stroage: ClaimStorage = InMemoryClaimStorage()
+claim_storage: ClaimStorage = InMemoryClaimStorage()
 routes = web.RouteTableDef()
 
 ln_bits_api = LnBitsApi(aiohttp.ClientSession(), ln_bits_url, ln_bits_api_key)
@@ -56,6 +57,7 @@ async def do_create_pay_link(
     id = await ln_bits_api.create_pay_link(amount, claim, callback_url)
 
     return id, await ln_bits_api.get_payment_link(id)
+
 
 @routes.post(URL_CLAIM)
 async def donation_key_claim(request: web.Request) -> web.Response:
@@ -73,7 +75,7 @@ async def donation_key_claim(request: web.Request) -> web.Response:
         domain + URL_PAYMENT_SUCCESS_CALLBACK,
     )
 
-    claim_stroage.add(claim, id, lnurl)
+    claim_storage.add(claim, id, lnurl)
 
     return web.Response(body=json.dumps({"lnurl": lnurl}))
 
@@ -93,22 +95,33 @@ async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
     id = LnBitsPaymentLinkId(int(json_request["lnurlp"]))
     amount = AmountSats(Decimal(json_request["amount"]))
 
-    claim = claim_stroage.get_claim_by_id(id)
+    claim = claim_storage.get_claim_by_id(id)
 
     if claim is None:
         logging.error(f"WebServer: CLAIM NOT FOUND! for body: {json_request}")
         return web.Response(body="", status=200)
 
     if amount < sats_amount:
-        claim_stroage.change_status(
+        claim_storage.change_status(
             claim, f"Amount send ${json_request.amount} is less then ${sats_amount}, please contact suport for refund"
         )
         return web.Response(body="", status=200)
 
-    claim_stroage.change_status(claim, f"Sucessfully claimed")
-    claim_stroage.change_status(claim, f"KEY: {sign(private_key_path, claim)}")
+    claim_storage.change_status(claim, f"Sucessfully claimed")
+    claim_storage.change_status(claim, f"KEY: {sign(private_key_path, claim)}")
 
     return web.Response(body="", status=200)
+
+
+@routes.get(URL_CLAIM + "/{claim}")
+async def get_claim_status(request: web.Request) -> web.Response:
+    claim = DonationTokenClaim(request.match_info["claim"])
+    status = claim_storage.get_claim_status(claim)
+
+    if status is None:
+        return web.Response(status=404)
+
+    return web.Response(body=json.dumps({"status": status}), status=200)
 
 
 app = web.Application()
