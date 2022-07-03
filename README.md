@@ -3,7 +3,7 @@
 ```
 python3.10 -m venv venv
 source venv/bin/activate
-pip install asyncio aiohttp
+pip install asyncio aiohttp pycryptodome
 # For development
 pip install black mypy
 ```
@@ -11,7 +11,7 @@ pip install black mypy
 Env:
 
 ```
-LNURL_TOKEN="<lnurl-token>" SATS_AMOUNT="<required payment in sats>"
+PRIVATE_KEY="" DOMAIN="" LN_BITS_API_KEY="" LN_BITS_URL="" SATS_AMOUNT=""
 ```
 
 Check:

@@ -1,11 +1,13 @@
-from cmath import log
-from decimal import Decimal
-import logging
-from typing import Dict, NewType, Optional, Tuple
-import aiohttp
-from aiohttp import web
 import os
+import logging
+import aiohttp
 import json
+
+from decimal import Decimal
+from typing import NewType, Tuple
+from aiohttp import web
+
+from claim_storage import ClaimStorage, InMemoryClaimStorage
 
 from lnbits import (
     AmountSats,
@@ -14,8 +16,7 @@ from lnbits import (
     LnBitsPaymentLinkId,
     LnUrl,
 )
-from utils import dict_key_by_value
-
+from sign import sign
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
@@ -30,7 +31,7 @@ def get_env(name: str) -> str:
 
     return raw
 
-
+private_key_path = get_env("PRIVATE_KEY")
 domain = get_env("DOMAIN")
 ln_bits_api_key = LnBitsApiKey(get_env("LN_BITS_API_KEY"))
 ln_bits_url = LnBitsApiKey(get_env("LN_BITS_URL"))
@@ -41,25 +42,7 @@ URL_CLAIM = "/api/donation/key/claim"
 URL_PAYMENT_SUCCESS_CALLBACK = "/api/donation/key/payment-success-callback"
 
 
-class ClaimStorage:
-    _lnurls: Dict[DonationTokenClaim, LnUrl] = {}
-    _ids: Dict[DonationTokenClaim, int] = {}
-
-    _status: Dict[DonationTokenClaim, str] = {}
-
-    def add(self, claim: DonationTokenClaim, id: int, ln_url: LnUrl) -> None:
-        self._lnurls[claim] = ln_url
-        self._ids[claim] = id
-        self._status[claim] = "Waiting for payment"
-
-    def change_status(self, claim: DonationTokenClaim, status: str) -> None:
-        self._status[claim] = status
-
-    def get_claim_by_id(self, id: int) -> Optional[DonationTokenClaim]:
-        return dict_key_by_value(self._ids, id)
-
-
-claim_stroage = ClaimStorage()
+claim_stroage: ClaimStorage = InMemoryClaimStorage()
 routes = web.RouteTableDef()
 
 ln_bits_api = LnBitsApi(aiohttp.ClientSession(), ln_bits_url, ln_bits_api_key)
@@ -73,7 +56,6 @@ async def do_create_pay_link(
     id = await ln_bits_api.create_pay_link(amount, claim, callback_url)
 
     return id, await ln_bits_api.get_payment_link(id)
-
 
 @routes.post(URL_CLAIM)
 async def donation_key_claim(request: web.Request) -> web.Response:
@@ -123,7 +105,8 @@ async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
         )
         return web.Response(body="", status=200)
 
-    claim_stroage.change_status(claim, json_request.payment_request)
+    claim_stroage.change_status(claim, f"Sucessfully claimed")
+    claim_stroage.change_status(claim, f"KEY: {sign(private_key_path, claim)}")
 
     return web.Response(body="", status=200)
 
