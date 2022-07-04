@@ -6,6 +6,7 @@ import json
 from decimal import Decimal
 from typing import NewType, Tuple
 from aiohttp import web
+from pydantic import BaseModel
 from claim import DonationTokenClaim
 
 from claim_storage import ClaimStorage, InMemoryClaimStorage
@@ -57,29 +58,34 @@ async def do_create_pay_link(
     claim: DonationTokenClaim,
     callback_url: str,
 ) -> Tuple[LnBitsPaymentLinkId, LnUrl]:
-    id = await ln_bits_api.create_pay_link(amount, claim, callback_url)
+    response = await ln_bits_api.create_pay_link(amount, claim, callback_url)
+    created_payment_link = await ln_bits_api.get_payment_link(response.id)
 
-    return id, await ln_bits_api.get_payment_link(id)
+    return created_payment_link.id, created_payment_link.lnurl
+
+
+class CreateClaimApi(BaseModel):
+    claim: DonationTokenClaim
 
 
 @routes.post(URL_CLAIM)
-async def donation_key_claim(request: web.Request) -> web.Response:
+async def create_claim(request: web.Request) -> web.Response:
     json_request = await request.json()
     logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
+    create_claim_api = CreateClaimApi(**json_request)
 
-    if json_request["claim"] is None:
+    if create_claim_api.claim is None:
         # Todo: validate claim (lenght, format, ....)
         return web.Response(body=json.dumps({"errors": ["'claim' is missing in the body "]}))
 
-    claim = DonationTokenClaim(json_request["claim"])
     id, lnurl = await do_create_pay_link(
         sats_amount,
-        claim,
+        create_claim_api.claim,
         "https://webhook.site/e48b88ce-b07d-43b0-b377-78726d444539"
         # domain + URL_PAYMENT_SUCCESS_CALLBACK,
     )
 
-    claim_storage.add(claim, id)
+    claim_storage.add(create_claim_api.claim, id)
 
     return web.Response(body=json.dumps({"lnurl": lnurl}))
 
@@ -103,7 +109,7 @@ async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
     payment_hash = PaymentHash(json_request["payment_hash"])
     payment = await ln_bits_api.get_payment(payment_hash)
 
-    payment_validation = validate_payment_by_hash(payment, callback_data.lnurlp)
+    payment_validation = validate_payment_by_hash(payment, callback_data.lnurlp, sats_amount)
     if payment_validation is not None:
         claim_storage.change_status(claim, payment_validation)
         return web.Response(body="", status=200)

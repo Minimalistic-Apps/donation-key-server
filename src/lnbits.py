@@ -50,6 +50,23 @@ class LnBitsCallbackData(BaseModel):
     lnurlp: LnBitsPaymentLinkId
 
 
+class LnBitsPaymentLink(BaseModel):
+    id: LnBitsPaymentLinkId
+    wallet: str
+    description: str
+    min: float
+    max: float
+    served_meta: int
+    served_pr: int
+    webhook_url: str
+    # success_text: None
+    # success_url: None
+    # currency: None
+    comment_chars: int
+    fiat_base_multiplier: int
+    lnurl: LnUrl
+
+
 class LnBitsApi:
     def __init__(self, session: aiohttp.ClientSession, baseUrl: str, api_key: LnBitsApiKey) -> None:
         self._session = session
@@ -61,7 +78,7 @@ class LnBitsApi:
         amount: AmountSats,
         description: str,
         callback_url: str,
-    ) -> LnBitsPaymentLinkId:
+    ) -> LnBitsPaymentLink:
         url = f"{self._baseUrl}/lnurlp/api/v1/links"
 
         request_body = {
@@ -75,24 +92,24 @@ class LnBitsApi:
 
         async with self._session.post(url, headers={"X-Api-Key": self._api_key}, json=request_body) as response:
             result = await response.json()
-            logging.info(f"Outgoing >>: {url}, Reqult: {result}")
+            logging.info(f"Outgoing >>: POST {url}, Reqult: {result}")
 
-            return LnBitsPaymentLinkId(int(result["id"]))
+            return LnBitsPaymentLink(**result)
 
-    async def get_payment_link(self, payId: LnBitsPaymentLinkId) -> LnUrl:
+    async def get_payment_link(self, payId: LnBitsPaymentLinkId) -> LnBitsPaymentLink:
         url = f"{self._baseUrl}/lnurlp/api/v1/links/{payId}"
 
         async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
             result = await response.json()
-            logging.info(f"Outgoing >> URL: {url}, Result: {result}")
+            logging.info(f"Outgoing >> URL: GET {url}, Result: {result}")
 
-            return LnUrl(result["lnurl"])
+            return LnBitsPaymentLink(**result)
 
     async def get_payment(self, payment_hash: PaymentHash) -> LnBitsPayment:
         url = f"{self._baseUrl}/api/v1/payments/{payment_hash}"
 
         async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
             result = await response.json()
-            logging.info(f"Outgoing >> URL: {url}, Result: {result}")
+            logging.info(f"Outgoing >> URL: GET {url}, Result: {result}")
 
             return LnBitsPayment(**result)
