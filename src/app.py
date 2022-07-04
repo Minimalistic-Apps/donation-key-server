@@ -1,17 +1,16 @@
 import asyncio
-import os
 import logging
-from weakref import WeakMethod
 import aiohttp
 import json
 
 from decimal import Decimal
-from typing import NewType, Tuple
+from typing import Tuple
 from aiohttp import web
 from pydantic import BaseModel
 from claim import DonationTokenClaim
 
 from claim_storage import ClaimStorage, InMemoryClaimStorage
+from get_env import get_env
 
 from lnbits import (
     AmountSats,
@@ -23,19 +22,11 @@ from lnbits import (
     PaymentHash,
 )
 from payment_callback_validation import payment_callback_validation
-from sign import sign
+from sign.sign import sign
 from validate_payment_by_hash import validate_payment_by_hash
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
-
-
-def get_env(name: str) -> str:
-    raw = os.environ.get(name)
-    if raw is None:
-        raise Exception("ENV variable '" + name + "' is missing")
-
-    return raw
 
 
 private_key_path = get_env("PRIVATE_KEY")
