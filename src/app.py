@@ -54,7 +54,9 @@ async def run() -> None:
     claim_storage: ClaimStorage = InMemoryClaimStorage()
     routes = web.RouteTableDef()
 
-    ln_bits_api = LnBitsApi(aiohttp.ClientSession(), ln_bits_url, ln_bits_api_key)
+    session = aiohttp.ClientSession()
+
+    ln_bits_api = LnBitsApi(session, ln_bits_url, ln_bits_api_key)
 
     async def do_create_pay_link(
         amount: AmountSats,
@@ -132,14 +134,17 @@ async def run() -> None:
     app = web.Application()
     app.add_routes(routes)
 
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "localhost", web_server_port)
-    await site.start()
-    logging.info(f"Server running at port: {web_server_port}")
-    while True:
-        await asyncio.sleep(10)
-    # await runner.cleanup()
+    try:
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "localhost", web_server_port)
+        await site.start()
+        logging.info(f"Server running at port: {web_server_port}")
+        while True:
+            await asyncio.sleep(10)
+        # await runner.cleanup()
+    finally:
+        await session.close()
 
 
 asyncio.run(run())
