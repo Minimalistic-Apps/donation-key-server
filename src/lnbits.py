@@ -1,6 +1,6 @@
 from decimal import Decimal
 import logging
-from typing import Dict, NewType
+from typing import Dict, NewType, Optional, Union
 import aiohttp
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ PaymentHash = NewType("PaymentHash", str)
 class LnBitsPaymentDetailsExtra(BaseModel):
     tag: str
     link: LnBitsPaymentLinkId
-    comment: str
+    comment: Optional[str]
     extra: str
     wh_status: int
 
@@ -46,11 +46,11 @@ class LnBitsCallbackData(BaseModel):
     payment_hash: PaymentHash
     payment_request: str
     amount: AmountSats
-    comment: str
+    comment: Optional[str]
     lnurlp: LnBitsPaymentLinkId
 
 
-class LnBitsPaymentLink(BaseModel):
+class LnBitsPaymentLinkCreate(BaseModel):
     id: LnBitsPaymentLinkId
     wallet: str
     description: str
@@ -64,6 +64,10 @@ class LnBitsPaymentLink(BaseModel):
     # currency: None
     comment_chars: int
     fiat_base_multiplier: int
+    # lnurl: any For some reason lnbit returns {} insetad of lnurl
+
+
+class LnBitsPaymentLinkGet(LnBitsPaymentLinkCreate):
     lnurl: LnUrl
 
 
@@ -78,7 +82,7 @@ class LnBitsApi:
         amount: AmountSats,
         description: str,
         callback_url: str,
-    ) -> LnBitsPaymentLink:
+    ) -> LnBitsPaymentLinkCreate:
         url = f"{self._baseUrl}/lnurlp/api/v1/links"
 
         request_body = {
@@ -94,16 +98,16 @@ class LnBitsApi:
             result = await response.json()
             logging.info(f"Outgoing >>: POST {url}, Reqult: {result}")
 
-            return LnBitsPaymentLink(**result)
+            return LnBitsPaymentLinkCreate(**result)
 
-    async def get_payment_link(self, payId: LnBitsPaymentLinkId) -> LnBitsPaymentLink:
+    async def get_payment_link(self, payId: LnBitsPaymentLinkId) -> LnBitsPaymentLinkGet:
         url = f"{self._baseUrl}/lnurlp/api/v1/links/{payId}"
 
         async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
             result = await response.json()
             logging.info(f"Outgoing >> URL: GET {url}, Result: {result}")
 
-            return LnBitsPaymentLink(**result)
+            return LnBitsPaymentLinkGet(**result)
 
     async def get_payment(self, payment_hash: PaymentHash) -> LnBitsPayment:
         url = f"{self._baseUrl}/api/v1/payments/{payment_hash}"
