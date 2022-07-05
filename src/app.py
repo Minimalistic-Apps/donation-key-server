@@ -1,15 +1,18 @@
+import os
+import sqlite3
 import asyncio
 import logging
 import aiohttp
 import json
 
 from decimal import Decimal
+from datetime import datetime
 from typing import Tuple
 from aiohttp import web
 from pydantic import BaseModel
-from claim import DonationTokenClaim
+from claim.claim import DonationTokenClaim
+from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
 
-from claim_storage import ClaimStorage, InMemoryClaimStorage
 from get_env import get_env
 
 from lnbits import (
@@ -40,10 +43,20 @@ web_server_port = 8080
 URL_CLAIM = "/api/donation/key/claim"
 URL_PAYMENT_SUCCESS_CALLBACK = "/api/donation/key/payment-success-callback"
 
+dirname = os.path.dirname(__file__)
+
 
 async def run() -> None:
-    claim_storage: ClaimStorage = InMemoryClaimStorage()
     routes = web.RouteTableDef()
+    db_path = f"{dirname}/database.db"
+    is_first_start = os.path.exists(db_path)
+    sql_lite_connection = sqlite3.connect(db_path)
+    sql_lite_storage = SqlLiteClaimStorage(datetime.now, sql_lite_connection)
+
+    if is_first_start:
+        sql_lite_storage.create_tables()
+
+    claim_storage: ClaimStorage = sql_lite_storage
 
     session = aiohttp.ClientSession()
 
@@ -107,8 +120,7 @@ async def run() -> None:
             claim_storage.change_status(claim, payment_validation)
             return web.Response(body="", status=200)
 
-        claim_storage.change_status(claim, f"Sucessfully claimed")
-        claim_storage.change_status(claim, f"KEY: {sign(private_key_path, claim)}")
+        claim_storage.save_success(claim, payment_hash, sign(private_key_path, claim))
 
         return web.Response(body="", status=200)
 
@@ -136,6 +148,7 @@ async def run() -> None:
         # await runner.cleanup()
     finally:
         await session.close()
+        sql_lite_connection.close()
 
 
 asyncio.run(run())
