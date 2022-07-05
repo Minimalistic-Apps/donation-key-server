@@ -7,11 +7,10 @@ import json
 
 from decimal import Decimal
 from datetime import datetime
-from typing import Tuple
 from aiohttp import web
-from pydantic import BaseModel
 from claim.claim import DonationTokenClaim
 from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
+from create_claim.create_claim_handler import CreateClaimApi, CreateClaimHandler
 
 from get_env import get_env
 
@@ -20,9 +19,6 @@ from lnbits import (
     LnBitsApi,
     LnBitsApiKey,
     LnBitsCallbackData,
-    LnBitsPaymentLinkId,
-    LnUrl,
-    PaymentHash,
 )
 from sign.sign import DonationKeySigner
 from success_callback.callback_handler import CallbackHandler
@@ -67,19 +63,7 @@ async def run() -> None:
     ln_bits_api = LnBitsApi(session, ln_bits_url, ln_bits_api_key)
 
     callback_handler = CallbackHandler(claim_storage, ln_bits_api, donation_key_signer)
-
-    async def do_create_pay_link(
-        amount: AmountSats,
-        claim: DonationTokenClaim,
-        callback_url: str,
-    ) -> Tuple[LnBitsPaymentLinkId, LnUrl]:
-        response = await ln_bits_api.create_pay_link(amount, claim, callback_url)
-        created_payment_link = await ln_bits_api.get_payment_link(response.id)
-
-        return created_payment_link.id, created_payment_link.lnurl
-
-    class CreateClaimApi(BaseModel):
-        claim: DonationTokenClaim
+    create_claim_handler = CreateClaimHandler(claim_storage, ln_bits_api)
 
     @routes.post(URL_CLAIM)
     async def create_claim(request: web.Request) -> web.Response:
@@ -87,18 +71,7 @@ async def run() -> None:
         logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
         create_claim_api = CreateClaimApi(**json_request)
 
-        if create_claim_api.claim is None:
-            # Todo: validate claim (lenght, format, ....)
-            return web.Response(body=json.dumps({"errors": ["'claim' is missing in the body "]}))
-
-        id, lnurl = await do_create_pay_link(
-            sats_amount,
-            create_claim_api.claim,
-            "https://webhook.site/e48b88ce-b07d-43b0-b377-78726d444539"
-            # domain + URL_PAYMENT_SUCCESS_CALLBACK,
-        )
-
-        claim_storage.add(create_claim_api.claim, id)
+        lnurl = create_claim_handler.handle(create_claim_api, sats_amount)
 
         return web.Response(body=json.dumps({"lnurl": lnurl}))
 

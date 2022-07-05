@@ -3,8 +3,9 @@ import sqlite3
 import pytest
 
 from datetime import datetime
+
 from claim.claim import DonationTokenClaim
-from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
+from claim.claim_storage import ClaimAlreadyExistsException, ClaimStorage, SqlLiteClaimStorage
 
 from claim.donation_key import DonationKey
 from lnbits import LnBitsPaymentLinkId, PaymentHash
@@ -57,4 +58,9 @@ def test_storage_happy_path(storage: ClaimStorage) -> None:
     assert storage.is_payment_hashed_used(PaymentHash("BBB")) is False
 
     # User tries to create same claim again (with new link)
-    storage.add(claim_A, link_2)
+    # the previous link is prvied in the exception!
+    try:
+        storage.add(claim_A, link_2)
+        assert False, "Should raise ClaimAlreadyExistsException"
+    except ClaimAlreadyExistsException as e:
+        assert e.existing_payment_link_id() == link_1

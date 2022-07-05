@@ -10,6 +10,15 @@ from claim.statuses import CREATED_STATUS, SUCCESS_STATUS
 from lnbits import LnBitsPaymentLinkId, PaymentHash
 
 
+class ClaimAlreadyExistsException(Exception):
+    def __init__(self, existing_payment_link_id: LnBitsPaymentLinkId) -> None:
+        super().__init__()
+        self._existing_payment_link_id = existing_payment_link_id
+
+    def existing_payment_link_id(self) -> LnBitsPaymentLinkId:
+        return self._existing_payment_link_id
+
+
 class ClaimStorage(metaclass=ABCMeta):
     @abstractmethod
     def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
@@ -67,6 +76,14 @@ class SqlLiteClaimStorage(ClaimStorage):
         self._connection.commit()
 
     def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
+        cur = self._connection.cursor()
+        cur.execute("SELECT lnbit_payment_link_id FROM claims WHERE claim = :claim", {"claim": claim})
+        existing_claim_row = cur.fetchone()
+        cur.close()
+
+        if existing_claim_row is not None:
+            raise ClaimAlreadyExistsException(LnBitsPaymentLinkId(existing_claim_row[0]))
+
         self._connection.execute("INSERT INTO claims (claim, lnbit_payment_link_id) VALUES (?, ?)", (claim, id))
         self._connection.commit()
         self.change_status(claim, CREATED_STATUS)
