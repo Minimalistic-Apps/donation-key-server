@@ -1,11 +1,10 @@
 import os
 import sqlite3
-from typing import Generator
 import pytest
 
 from datetime import datetime
 from claim.claim import DonationTokenClaim
-from claim.claim_storage import ClaimStorage, InMemoryClaimStorage, SqlLiteClaimStorage
+from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
 
 from claim.donation_key import DonationKey
 from lnbits import LnBitsPaymentLinkId, PaymentHash
@@ -35,24 +34,27 @@ def create_fresh_sql_live_storage() -> SqlLiteClaimStorage:
 
 @pytest.mark.parametrize(
     "storage",
-    [
-        InMemoryClaimStorage(test_now),
-        create_fresh_sql_live_storage(),
-    ],
+    [create_fresh_sql_live_storage()],
 )
 def test_storage_happy_path(storage: ClaimStorage) -> None:
-
+    # User creates claim
     storage.add(claim_A, link_1)
-    assert storage.get_claim_status(claim_A) == ["[1970-01-01T01:00:00] Claim created, waiting for payment..."]
+    assert storage.get_claim_status(claim_A) == (None, ["[1970-01-01T01:00:00] Claim created, waiting for payment..."])
     assert storage.get_claim_by_id(link_1) == claim_A
     assert storage.get_claim_by_id(link_2) is None
 
+    # User pays the LNURL and payment hash and donation key are stored
     storage.save_success(claim_A, PaymentHash("AAA"), DonationKey("A/XY12=="))
 
     assert storage.is_payment_hashed_used(PaymentHash("AAA")) is True
-    assert storage.get_claim_status(claim_A) == [
-        "[1970-01-01T01:00:00] Claim created, waiting for payment...",
-        "[1970-01-01T01:00:00] Sucessfully claimed.",
-    ]
-
+    assert storage.get_claim_status(claim_A) == (
+        "A/XY12==",
+        [
+            "[1970-01-01T01:00:00] Claim created, waiting for payment...",
+            "[1970-01-01T01:00:00] Sucessfully claimed.",
+        ],
+    )
     assert storage.is_payment_hashed_used(PaymentHash("BBB")) is False
+
+    # User tries to create same claim again (with new link)
+    storage.add(claim_A, link_2)

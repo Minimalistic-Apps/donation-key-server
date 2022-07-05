@@ -63,7 +63,7 @@ class LnBitsPaymentLinkCreate(BaseModel):
     # success_url: None
     # currency: None
     comment_chars: int
-    fiat_base_multiplier: int
+    # fiat_base_multiplier: int # no present for all versions
     # lnurl: any For some reason lnbit returns {} insetad of lnurl
 
 

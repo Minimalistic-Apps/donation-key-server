@@ -1,6 +1,6 @@
 import os
 
-from sign.sign import sign
+from sign.sign import DonationKeySigner
 
 
 dirname = os.path.dirname(__file__)
@@ -8,7 +8,7 @@ dirname = os.path.dirname(__file__)
 
 def test_sign() -> None:
     private_key_path = f"{dirname}/test_privatekey.pem"
-    signature = sign(private_key_path, "Bitcoin: A Peer-to-Peer Electronic Cash System")
+    signature = DonationKeySigner(private_key_path).sign("Bitcoin: A Peer-to-Peer Electronic Cash System")
 
     assert signature == (
         "ZJEwqajrMMajJPjQAfV2T5uMELwo9QhNz3W5IpL3hco+VzO6Wk7bGkP+NqCKB3mB1hmy"

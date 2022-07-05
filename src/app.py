@@ -24,9 +24,8 @@ from lnbits import (
     LnUrl,
     PaymentHash,
 )
-from payment_callback_validation import payment_callback_validation
-from sign.sign import sign
-from validate_payment_by_hash import validate_payment_by_hash
+from sign.sign import DonationKeySigner
+from success_callback.callback_handler import CallbackHandler
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
@@ -39,6 +38,8 @@ ln_bits_url = LnBitsApiKey(get_env("LN_BITS_URL"))
 sats_amount = AmountSats(Decimal(get_env("SATS_AMOUNT")))
 web_server_port = 8080
 
+if not os.path.exists(private_key_path):
+    raise Exception(f"Private key {private_key_path} not found")
 
 URL_CLAIM = "/api/donation/key/claim"
 URL_PAYMENT_SUCCESS_CALLBACK = "/api/donation/key/payment-success-callback"
@@ -47,13 +48,16 @@ dirname = os.path.dirname(__file__)
 
 
 async def run() -> None:
+    donation_key_signer = DonationKeySigner(private_key_path)
+
     routes = web.RouteTableDef()
     db_path = f"{dirname}/database.db"
     is_first_start = os.path.exists(db_path)
     sql_lite_connection = sqlite3.connect(db_path)
     sql_lite_storage = SqlLiteClaimStorage(datetime.now, sql_lite_connection)
 
-    if is_first_start:
+    if not is_first_start:
+        logging.info(f"Fresh database, creating tables.")
         sql_lite_storage.create_tables()
 
     claim_storage: ClaimStorage = sql_lite_storage
@@ -61,6 +65,8 @@ async def run() -> None:
     session = aiohttp.ClientSession()
 
     ln_bits_api = LnBitsApi(session, ln_bits_url, ln_bits_api_key)
+
+    callback_handler = CallbackHandler(claim_storage, ln_bits_api, donation_key_signer)
 
     async def do_create_pay_link(
         amount: AmountSats,
@@ -101,38 +107,19 @@ async def run() -> None:
         json_request = await request.json()
         logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
         callback_data = LnBitsCallbackData(**json_request)
-        claim = claim_storage.get_claim_by_id(callback_data.lnurlp)
-
-        if claim is None:
-            logging.error(f"WebServer: CLAIM NOT FOUND! for body: {json_request}")
-            return web.Response(body="", status=200)
-
-        callback_validation = payment_callback_validation(callback_data, sats_amount)
-        if callback_validation is not None:
-            claim_storage.change_status(claim, callback_validation)
-            return web.Response(body="", status=200)
-
-        payment_hash = PaymentHash(json_request["payment_hash"])
-        payment = await ln_bits_api.get_payment(payment_hash)
-
-        payment_validation = validate_payment_by_hash(payment, callback_data.lnurlp, sats_amount)
-        if payment_validation is not None:
-            claim_storage.change_status(claim, payment_validation)
-            return web.Response(body="", status=200)
-
-        claim_storage.save_success(claim, payment_hash, sign(private_key_path, claim))
+        await callback_handler.handle(callback_data, sats_amount)
 
         return web.Response(body="", status=200)
 
     @routes.get(URL_CLAIM + "/{claim}")
     async def get_claim_status(request: web.Request) -> web.Response:
         claim = DonationTokenClaim(request.match_info["claim"])
-        status = claim_storage.get_claim_status(claim)
+        key, status = claim_storage.get_claim_status(claim)
 
         if status is None:
             return web.Response(status=404)
 
-        return web.Response(body=json.dumps({"status": status}), status=200)
+        return web.Response(body=json.dumps({"key": key, "status": status}), status=200)
 
     app = web.Application()
     app.add_routes(routes)

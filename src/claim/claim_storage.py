@@ -1,10 +1,11 @@
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
 from sqlite3 import Connection
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from claim.claim import DonationTokenClaim
 from claim.donation_key import DonationKey
+from claim.statuses import CREATED_STATUS, SUCCESS_STATUS
 
 from lnbits import LnBitsPaymentLinkId, PaymentHash
 
@@ -27,46 +28,12 @@ class ClaimStorage(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_claim_status(self, claim: DonationTokenClaim) -> Optional[List[str]]:
+    def get_claim_status(self, claim: DonationTokenClaim) -> Tuple[Optional[DonationKey], Optional[List[str]]]:
         raise NotImplementedError()
 
     @abstractmethod
     def is_payment_hashed_used(self, payment_hash: PaymentHash) -> bool:
         raise NotImplementedError()
-
-
-CREATED_STATUS = "Claim created, waiting for payment..."
-SUCCESS_STATUS = "Sucessfully claimed."
-
-
-class InMemoryClaimStorage(ClaimStorage):
-    _ids: Dict[LnBitsPaymentLinkId, DonationTokenClaim] = {}
-    _status: Dict[DonationTokenClaim, List[str]] = {}
-    _used_hashes: Dict[PaymentHash, DonationTokenClaim] = {}
-
-    def __init__(self, now_date_function: Callable[[], datetime]) -> None:
-        self._now_date_function = now_date_function
-
-    def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
-        self._ids[id] = claim
-        self._status[claim] = []
-        self.change_status(claim, CREATED_STATUS)
-
-    def change_status(self, claim: DonationTokenClaim, status: str) -> None:
-        self._status[claim].append(f"[{self._now_date_function().isoformat()}] {status}")
-
-    def get_claim_by_id(self, id: LnBitsPaymentLinkId) -> Optional[DonationTokenClaim]:
-        return self._ids.get(id, None)
-
-    def get_claim_status(self, claim: DonationTokenClaim) -> Optional[List[str]]:
-        return self._status.get(claim, None)
-
-    def save_success(self, claim: DonationTokenClaim, payment_hash: PaymentHash, donation_key: DonationKey) -> None:
-        self._used_hashes[payment_hash] = claim
-        self.change_status(claim, SUCCESS_STATUS)
-
-    def is_payment_hashed_used(self, payment_hash: PaymentHash) -> bool:
-        return self._used_hashes.get(payment_hash, None) != None
 
 
 class SqlLiteClaimStorage(ClaimStorage):
@@ -125,16 +92,21 @@ class SqlLiteClaimStorage(ClaimStorage):
 
         return DonationTokenClaim(row[0])
 
-    def get_claim_status(self, claim: DonationTokenClaim) -> Optional[List[str]]:
+    def get_claim_status(self, claim: DonationTokenClaim) -> Tuple[DonationKey, Optional[List[str]]]:
         cur = self._connection.cursor()
         cur.execute("SELECT created_at, status FROM statuses WHERE claim = :claim", {"claim": claim})
-        rows = cur.fetchall()
+        status_rows = cur.fetchall()
         cur.close()
 
-        if rows is None:
+        if status_rows is None:
             return None
 
-        return [f"[{datetime.fromtimestamp(row[0]).isoformat()}] {row[1]}" for row in rows]
+        cur = self._connection.cursor()
+        cur.execute("SELECT donation_key FROM claims WHERE claim = :claim", {"claim": claim})
+        row = cur.fetchone()
+        cur.close()
+
+        return row[0], [f"[{datetime.fromtimestamp(row[0]).isoformat()}] {row[1]}" for row in status_rows]
 
     def save_success(self, claim: DonationTokenClaim, payment_hash: PaymentHash, donation_key: DonationKey) -> None:
         self._connection.execute(
