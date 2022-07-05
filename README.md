@@ -26,3 +26,7 @@ Test:
 ```
 python -m pytest -vv
 ```
+
+Tips:
+
+- https://webhook.site for webhook testing

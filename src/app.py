@@ -71,7 +71,7 @@ async def run() -> None:
         logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
         create_claim_api = CreateClaimApi(**json_request)
 
-        lnurl = create_claim_handler.handle(create_claim_api, sats_amount)
+        lnurl = await create_claim_handler.handle(create_claim_api, sats_amount)
 
         return web.Response(body=json.dumps({"lnurl": lnurl}))
 

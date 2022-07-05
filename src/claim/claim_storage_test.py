@@ -5,7 +5,7 @@ import pytest
 from datetime import datetime
 
 from claim.claim import DonationTokenClaim
-from claim.claim_storage import ClaimAlreadyExistsException, ClaimStorage, SqlLiteClaimStorage
+from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
 
 from claim.donation_key import DonationKey
 from lnbits import LnBitsPaymentLinkId, PaymentHash
@@ -15,6 +15,7 @@ dirname = os.path.dirname(__file__)
 claim_A = DonationTokenClaim("A")
 link_1 = LnBitsPaymentLinkId(1)
 
+claim_B = DonationTokenClaim("B")
 link_2 = LnBitsPaymentLinkId(2)
 
 
@@ -43,6 +44,8 @@ def test_storage_happy_path(storage: ClaimStorage) -> None:
     assert storage.get_claim_status(claim_A) == (None, ["[1970-01-01T01:00:00] Claim created, waiting for payment..."])
     assert storage.get_claim_by_id(link_1) == claim_A
     assert storage.get_claim_by_id(link_2) is None
+    assert storage.get_claim(claim_A) == link_1
+    assert storage.get_claim(claim_B) is None
 
     # User pays the LNURL and payment hash and donation key are stored
     storage.save_success(claim_A, PaymentHash("AAA"), DonationKey("A/XY12=="))
@@ -56,11 +59,3 @@ def test_storage_happy_path(storage: ClaimStorage) -> None:
         ],
     )
     assert storage.is_payment_hashed_used(PaymentHash("BBB")) is False
-
-    # User tries to create same claim again (with new link)
-    # the previous link is prvied in the exception!
-    try:
-        storage.add(claim_A, link_2)
-        assert False, "Should raise ClaimAlreadyExistsException"
-    except ClaimAlreadyExistsException as e:
-        assert e.existing_payment_link_id() == link_1

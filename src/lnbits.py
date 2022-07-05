@@ -95,8 +95,8 @@ class LnBitsApi:
         }
 
         async with self._session.post(url, headers={"X-Api-Key": self._api_key}, json=request_body) as response:
+            logging.info(f"Outgoing >>: POST {url}, Result: {response.status} {await response.text()}")
             result = await response.json()
-            logging.info(f"Outgoing >>: POST {url}, Reqult: {result}")
 
             return LnBitsPaymentLinkCreate(**result)
 
@@ -104,8 +104,8 @@ class LnBitsApi:
         url = f"{self._baseUrl}/lnurlp/api/v1/links/{payId}"
 
         async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
+            logging.info(f"Outgoing >>: GET {url}, Result: {response.status} {await response.text()}")
             result = await response.json()
-            logging.info(f"Outgoing >> URL: GET {url}, Result: {result}")
 
             return LnBitsPaymentLinkGet(**result)
 
@@ -113,7 +113,7 @@ class LnBitsApi:
         url = f"{self._baseUrl}/api/v1/payments/{payment_hash}"
 
         async with self._session.get(url, headers={"X-Api-Key": self._api_key}) as response:
+            logging.info(f"Outgoing >>: POST {url}, Result: {response.status} {await response.text()}")
             result = await response.json()
-            logging.info(f"Outgoing >> URL: GET {url}, Result: {result}")
 
             return LnBitsPayment(**result)

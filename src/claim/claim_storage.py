@@ -10,15 +10,6 @@ from claim.statuses import CREATED_STATUS, SUCCESS_STATUS
 from lnbits import LnBitsPaymentLinkId, PaymentHash
 
 
-class ClaimAlreadyExistsException(Exception):
-    def __init__(self, existing_payment_link_id: LnBitsPaymentLinkId) -> None:
-        super().__init__()
-        self._existing_payment_link_id = existing_payment_link_id
-
-    def existing_payment_link_id(self) -> LnBitsPaymentLinkId:
-        return self._existing_payment_link_id
-
-
 class ClaimStorage(metaclass=ABCMeta):
     @abstractmethod
     def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
@@ -38,6 +29,10 @@ class ClaimStorage(metaclass=ABCMeta):
 
     @abstractmethod
     def get_claim_status(self, claim: DonationTokenClaim) -> Tuple[Optional[DonationKey], Optional[List[str]]]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_claim(self, claim: DonationTokenClaim) -> Optional[LnBitsPaymentLinkId]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -75,15 +70,18 @@ class SqlLiteClaimStorage(ClaimStorage):
         self._connection.execute("CREATE INDEX statuses_claim ON statuses (claim)")
         self._connection.commit()
 
-    def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
+    def get_claim(self, claim: DonationTokenClaim) -> Optional[LnBitsPaymentLinkId]:
         cur = self._connection.cursor()
         cur.execute("SELECT lnbit_payment_link_id FROM claims WHERE claim = :claim", {"claim": claim})
-        existing_claim_row = cur.fetchone()
+        row = cur.fetchone()
         cur.close()
 
-        if existing_claim_row is not None:
-            raise ClaimAlreadyExistsException(LnBitsPaymentLinkId(existing_claim_row[0]))
+        if row is None:
+            return None
 
+        return LnBitsPaymentLinkId(row[0])
+
+    def add(self, claim: DonationTokenClaim, id: LnBitsPaymentLinkId) -> None:
         self._connection.execute("INSERT INTO claims (claim, lnbit_payment_link_id) VALUES (?, ?)", (claim, id))
         self._connection.commit()
         self.change_status(claim, CREATED_STATUS)

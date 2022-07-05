@@ -1,8 +1,10 @@
+from asyncio.log import logger
 from typing import Tuple
 from pydantic import BaseModel
+from claim import claim
 
 from claim.claim import DonationTokenClaim
-from claim.claim_storage import ClaimAlreadyExistsException, ClaimStorage
+from claim.claim_storage import ClaimStorage
 from lnbits import AmountSats, LnBitsApi, LnBitsPaymentLinkId, LnUrl
 
 
@@ -27,6 +29,13 @@ class CreateClaimHandler:
         return created_payment_link.id, created_payment_link.lnurl
 
     async def handle(self, create_claim_api: CreateClaimApi, expected_sats_amount: AmountSats) -> LnUrl:
+        existing_payment_link_id = self._claim_storage.get_claim(create_claim_api.claim)
+
+        if existing_payment_link_id is not None:
+            logger.warning(f"Claim ${create_claim_api.claim} already has an payment link {existing_payment_link_id}")
+            existing_payment_link = await self._ln_bits_api.get_payment_link(existing_payment_link_id)
+            return existing_payment_link.lnurl
+
         id, lnurl = await self._do_create_pay_link(
             expected_sats_amount,
             create_claim_api.claim,
@@ -34,10 +43,6 @@ class CreateClaimHandler:
             # domain + URL_PAYMENT_SUCCESS_CALLBACK,
         )
 
-        try:
-            self._claim_storage.add(create_claim_api.claim, id)
-        except ClaimAlreadyExistsException as e:
-            existing_payment_link = await self._ln_bits_api.get_payment_link(e.existing_payment_link_id())
-            lnurl = existing_payment_link.lnurl
+        self._claim_storage.add(create_claim_api.claim, id)
 
         return lnurl
