@@ -65,22 +65,29 @@ async def run() -> None:
     callback_handler = CallbackHandler(claim_storage, ln_bits_api, donation_key_signer)
     create_claim_handler = CreateClaimHandler(claim_storage, ln_bits_api)
 
+    create_claim_semaphore = asyncio.Semaphore(1)
+
     @routes.post(URL_CLAIM)
     async def create_claim(request: web.Request) -> web.Response:
         json_request = await request.json()
         logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
         create_claim_api = CreateClaimApi(**json_request)
 
-        lnurl = await create_claim_handler.handle(create_claim_api, sats_amount)
+        async with create_claim_semaphore:
+            lnurl = await create_claim_handler.handle(create_claim_api, sats_amount)
 
         return web.Response(body=json.dumps({"lnurl": lnurl}))
+
+    lnurl_payment_success_callback_semaphore = asyncio.Semaphore(1)
 
     @routes.post(URL_PAYMENT_SUCCESS_CALLBACK)
     async def lnurl_payment_success_callback(request: web.Request) -> web.Response:
         json_request = await request.json()
         logging.info(f"WebServer: POST {URL_CLAIM}, body: {json_request}")
         callback_data = LnBitsCallbackData(**json_request)
-        await callback_handler.handle(callback_data, sats_amount)
+
+        async with lnurl_payment_success_callback_semaphore:
+            await callback_handler.handle(callback_data, sats_amount)
 
         return web.Response(body="", status=200)
 
