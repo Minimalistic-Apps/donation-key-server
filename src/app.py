@@ -32,7 +32,7 @@ domain = get_env("DOMAIN")
 ln_bits_api_key = LnBitsApiKey(get_env("LN_BITS_API_KEY"))
 ln_bits_url = LnBitsApiKey(get_env("LN_BITS_URL"))
 sats_amount = AmountSats(Decimal(get_env("SATS_AMOUNT")))
-web_server_port = 8080
+web_server_port = get_env("PORT")
 
 if not os.path.exists(private_key_path):
     raise Exception(f"Private key {private_key_path} not found")
