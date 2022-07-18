@@ -37,8 +37,8 @@ web_server_port = get_env("PORT")
 if not os.path.exists(private_key_path):
     raise Exception(f"Private key {private_key_path} not found")
 
-URL_CLAIM = "/api/donation/key/claim"
-URL_PAYMENT_SUCCESS_CALLBACK = "/api/donation/key/payment-success-callback"
+URL_CLAIM = "/api/key/claim"
+URL_PAYMENT_SUCCESS_CALLBACK = "/api/key/payment-success-callback"
 
 dirname = os.path.dirname(__file__)
 
