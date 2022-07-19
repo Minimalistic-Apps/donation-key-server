@@ -70,7 +70,7 @@ async def run() -> None:
     @routes.post("/")
     async def root(request: web.Request) -> web.Response:
 
-        return web.Response(body=json.dumps({"ok": true}))
+        return web.Response(body=json.dumps({"ok": True}))
 
     @routes.post(URL_CLAIM)
     async def create_claim(request: web.Request) -> web.Response:
