@@ -67,6 +67,11 @@ async def run() -> None:
 
     create_claim_semaphore = asyncio.Semaphore(1)
 
+    @routes.post("/")
+    async def root(request: web.Request) -> web.Response:
+
+        return web.Response(body=json.dumps({"ok": true}))
+
     @routes.post(URL_CLAIM)
     async def create_claim(request: web.Request) -> web.Response:
         json_request = await request.json()
