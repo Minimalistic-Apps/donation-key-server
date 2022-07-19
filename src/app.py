@@ -37,8 +37,8 @@ web_server_port = get_env("PORT")
 if not os.path.exists(private_key_path):
     raise Exception(f"Private key {private_key_path} not found")
 
-URL_CLAIM = "/api/key/claim"
-URL_PAYMENT_SUCCESS_CALLBACK = "/api/key/payment-success-callback"
+URL_CLAIM = "/donation/api/key/claim"
+URL_PAYMENT_SUCCESS_CALLBACK = "/donation/api/key/payment-success-callback"
 
 dirname = os.path.dirname(__file__)
 
@@ -67,7 +67,7 @@ async def run() -> None:
 
     create_claim_semaphore = asyncio.Semaphore(1)
 
-    @routes.get("/api")
+    @routes.get("/donation/api")
     async def root(request: web.Request) -> web.Response:
         return web.Response(body=json.dumps({"ok": True}))
 
