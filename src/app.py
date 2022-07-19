@@ -67,7 +67,7 @@ async def run() -> None:
 
     create_claim_semaphore = asyncio.Semaphore(1)
 
-    @routes.post("/")
+    @routes.get("/api")
     async def root(request: web.Request) -> web.Response:
 
         return web.Response(body=json.dumps({"ok": True}))
