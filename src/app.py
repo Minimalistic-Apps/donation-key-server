@@ -69,7 +69,6 @@ async def run() -> None:
 
     @routes.get("/api")
     async def root(request: web.Request) -> web.Response:
-
         return web.Response(body=json.dumps({"ok": True}))
 
     @routes.post(URL_CLAIM)
