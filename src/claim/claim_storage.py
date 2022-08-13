@@ -121,6 +121,9 @@ class SqlLiteClaimStorage(ClaimStorage):
         row = cur.fetchone()
         cur.close()
 
+        if row is None:
+            return None
+
         return row[0], [f"[{datetime.fromtimestamp(row[0]).isoformat()}] {row[1]}" for row in status_rows]
 
     def save_success(self, claim: DonationTokenClaim, payment_hash: PaymentHash, donation_key: DonationKey) -> None:

@@ -59,3 +59,8 @@ def test_storage_happy_path(storage: ClaimStorage) -> None:
         ],
     )
     assert storage.is_payment_hashed_used(PaymentHash("BBB")) is False
+
+
+def test_storage_not_found() -> None:
+    storage = create_fresh_sql_live_storage()
+    assert storage.get_claim_status("non-existing") is None
