@@ -100,7 +100,7 @@ async def run() -> None:
         claim = DonationTokenClaim(request.match_info["claim"])
         result = claim_storage.get_claim_status(claim)
 
-        if status is None:
+        if result is None:
             return web.Response(status=404)
 
         key, status = result
