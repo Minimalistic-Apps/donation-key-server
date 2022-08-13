@@ -98,10 +98,12 @@ async def run() -> None:
     @routes.get(URL_CLAIM + "/{claim}")
     async def get_claim_status(request: web.Request) -> web.Response:
         claim = DonationTokenClaim(request.match_info["claim"])
-        key, status = claim_storage.get_claim_status(claim)
+        result = claim_storage.get_claim_status(claim)
 
         if status is None:
             return web.Response(status=404)
+
+        key, status = result
 
         return web.Response(body=json.dumps({"key": key, "status": status}), status=200)
 
