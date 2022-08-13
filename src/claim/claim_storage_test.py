@@ -63,4 +63,4 @@ def test_storage_happy_path(storage: ClaimStorage) -> None:
 
 def test_storage_not_found() -> None:
     storage = create_fresh_sql_live_storage()
-    assert storage.get_claim_status("non-existing") is None
+    assert storage.get_claim_status(DonationTokenClaim("non-existing")) is None

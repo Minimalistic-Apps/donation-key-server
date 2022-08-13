@@ -28,7 +28,7 @@ class ClaimStorage(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_claim_status(self, claim: DonationTokenClaim) -> Tuple[Optional[DonationKey], Optional[List[str]]]:
+    def get_claim_status(self, claim: DonationTokenClaim) -> Optional[Tuple[Optional[DonationKey], List[str]]]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -107,7 +107,7 @@ class SqlLiteClaimStorage(ClaimStorage):
 
         return DonationTokenClaim(row[0])
 
-    def get_claim_status(self, claim: DonationTokenClaim) -> Tuple[DonationKey, Optional[List[str]]]:
+    def get_claim_status(self, claim: DonationTokenClaim) -> Optional[Tuple[Optional[DonationKey], List[str]]]:
         cur = self._connection.cursor()
         cur.execute("SELECT created_at, status FROM statuses WHERE claim = :claim", {"claim": claim})
         status_rows = cur.fetchall()

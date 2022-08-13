@@ -1,11 +1,11 @@
 from asyncio.log import logger
 from typing import Tuple
 from pydantic import BaseModel
-from claim import claim
 
 from claim.claim import DonationTokenClaim
 from claim.claim_storage import ClaimStorage
 from lnbits import AmountSats, LnBitsApi, LnBitsPaymentLinkId, LnUrl
+from settings import DOMAIN, URL_PAYMENT_SUCCESS_CALLBACK
 
 
 class CreateClaimApi(BaseModel):
@@ -39,8 +39,7 @@ class CreateClaimHandler:
         id, lnurl = await self._do_create_pay_link(
             expected_sats_amount,
             create_claim_api.claim,
-            "https://webhook.site/e48b88ce-b07d-43b0-b377-78726d444539"
-            # domain + URL_PAYMENT_SUCCESS_CALLBACK,
+            DOMAIN + URL_PAYMENT_SUCCESS_CALLBACK,
         )
 
         self._claim_storage.add(create_claim_api.claim, id)

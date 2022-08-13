@@ -5,20 +5,21 @@ import logging
 import aiohttp
 import json
 
-from decimal import Decimal
 from datetime import datetime
 from aiohttp import web
 from claim.claim import DonationTokenClaim
 from claim.claim_storage import ClaimStorage, SqlLiteClaimStorage
 from create_claim.create_claim_handler import CreateClaimApi, CreateClaimHandler
 
-from get_env import get_env
-
-from lnbits import (
-    AmountSats,
-    LnBitsApi,
-    LnBitsApiKey,
-    LnBitsCallbackData,
+from lnbits import LnBitsApi, LnBitsCallbackData
+from settings import (
+    LN_BITS_API_KEY,
+    LN_BITS_URL,
+    PORT,
+    PRIVATE_KEY,
+    SATS_AMOUNT,
+    URL_CLAIM,
+    URL_PAYMENT_SUCCESS_CALLBACK,
 )
 from sign.sign import DonationKeySigner
 from success_callback.callback_handler import CallbackHandler
@@ -27,24 +28,14 @@ root = logging.getLogger()
 root.setLevel(logging.DEBUG)
 
 
-private_key_path = get_env("PRIVATE_KEY")
-domain = get_env("DOMAIN")
-ln_bits_api_key = LnBitsApiKey(get_env("LN_BITS_API_KEY"))
-ln_bits_url = LnBitsApiKey(get_env("LN_BITS_URL"))
-sats_amount = AmountSats(Decimal(get_env("SATS_AMOUNT")))
-web_server_port = get_env("PORT")
-
-if not os.path.exists(private_key_path):
-    raise Exception(f"Private key {private_key_path} not found")
-
-URL_CLAIM = "/donation/api/key/claim"
-URL_PAYMENT_SUCCESS_CALLBACK = "/donation/api/key/payment-success-callback"
+if not os.path.exists(PRIVATE_KEY):
+    raise Exception(f"Private key {PRIVATE_KEY} not found")
 
 dirname = os.path.dirname(__file__)
 
 
 async def run() -> None:
-    donation_key_signer = DonationKeySigner(private_key_path)
+    donation_key_signer = DonationKeySigner(PRIVATE_KEY)
 
     routes = web.RouteTableDef()
     db_path = f"{dirname}/database.db"
@@ -60,7 +51,7 @@ async def run() -> None:
 
     session = aiohttp.ClientSession()
 
-    ln_bits_api = LnBitsApi(session, ln_bits_url, ln_bits_api_key)
+    ln_bits_api = LnBitsApi(session, LN_BITS_URL, LN_BITS_API_KEY)
 
     callback_handler = CallbackHandler(claim_storage, ln_bits_api, donation_key_signer)
     create_claim_handler = CreateClaimHandler(claim_storage, ln_bits_api)
@@ -78,7 +69,7 @@ async def run() -> None:
         create_claim_api = CreateClaimApi(**json_request)
 
         async with create_claim_semaphore:
-            lnurl = await create_claim_handler.handle(create_claim_api, sats_amount)
+            lnurl = await create_claim_handler.handle(create_claim_api, SATS_AMOUNT)
 
         return web.Response(body=json.dumps({"lnurl": lnurl}))
 
@@ -91,7 +82,7 @@ async def run() -> None:
         callback_data = LnBitsCallbackData(**json_request)
 
         async with lnurl_payment_success_callback_semaphore:
-            await callback_handler.handle(callback_data, sats_amount)
+            await callback_handler.handle(callback_data, SATS_AMOUNT)
 
         return web.Response(body="", status=200)
 
@@ -113,9 +104,9 @@ async def run() -> None:
     try:
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, host="0.0.0.0", port=web_server_port)
+        site = web.TCPSite(runner, host="0.0.0.0", port=PORT)
         await site.start()
-        logging.info(f"Server running at port: {web_server_port}")
+        logging.info(f"Server running at port: {PORT}")
         while True:
             await asyncio.sleep(10)
         # await runner.cleanup()
