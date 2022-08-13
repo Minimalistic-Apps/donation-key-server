@@ -92,6 +92,9 @@ class LnBitsApi:
             "min": int(amount),
             "comment_chars": 0,
             "webhook_url": callback_url,
+            "success_text": "Thank you for your donation. Go back to the app!",
+            # NOT WORKING CURRENTLY! SOME ISSUE WITH JSON DECODING OF THE RESPONSE BY THE WALLET (LNURL returns 500)
+            # "success_url": "minimalistic-apps-price-converter://success",
         }
 
         async with self._session.post(url, headers={"X-Api-Key": self._api_key}, json=request_body) as response:
