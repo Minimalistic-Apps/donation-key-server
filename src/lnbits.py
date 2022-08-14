@@ -17,6 +17,7 @@ class LnBitsPaymentDetailsExtra(BaseModel):
     link: LnBitsPaymentLinkId
     comment: Optional[str]
     extra: str
+    wh_status: int
 
 
 class LnBitsPaymentDetails(BaseModel):
@@ -92,7 +93,8 @@ class LnBitsApi:
             "comment_chars": 0,
             "webhook_url": callback_url,
             "success_text": "Thank you for your donation. Go back to the app!",
-            "success_url": "minapps-priceconvertor://success",
+            # This causes 500 from lnbits (bug there?)
+            # "success_url": "minapps-priceconvertor://success",
         }
 
         async with self._session.post(url, headers={"X-Api-Key": self._api_key}, json=request_body) as response:
