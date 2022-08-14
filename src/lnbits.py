@@ -17,7 +17,6 @@ class LnBitsPaymentDetailsExtra(BaseModel):
     link: LnBitsPaymentLinkId
     comment: Optional[str]
     extra: str
-    wh_status: int
 
 
 class LnBitsPaymentDetails(BaseModel):
