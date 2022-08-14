@@ -87,7 +87,7 @@ class LnBitsApi:
         request_body = {
             "description": description,
             # "amount": amount,
-            "max": int(amount),  # min=max for fixed amount
+            "max": 1000000,
             "min": int(amount),
             "comment_chars": 0,
             "webhook_url": callback_url,
