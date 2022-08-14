@@ -58,7 +58,7 @@ class LnBitsPaymentLinkCreate(BaseModel):
     max: float
     served_meta: int
     served_pr: int
-    webhook_url: str
+    webhook_url: Optional[str]
     # success_text: None
     # success_url: None
     # currency: None
